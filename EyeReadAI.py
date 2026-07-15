@@ -1,12 +1,22 @@
 import streamlit as st
 import cv2
 import numpy as np
+import os
 
 # --- CONFIGURATION & IN-MEMORY CLASSIFIERS ---
 @st.cache_resource
 def load_classifiers():
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-    eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye_tree_eyeglasses.xml')
+    # Looks for the uploaded XML files directly in the repository directory
+    face_path = "haarcascade_frontalface_default.xml"
+    eye_path = "haarcascade_eye_tree_eyeglasses.xml"
+    
+    # Error checking to ensure files exist
+    if not os.path.exists(face_path) or not os.path.exists(eye_path):
+        st.error("❌ Model XML files missing from repository! Please ensure you uploaded them.")
+        return None, None
+        
+    face_cascade = cv2.CascadeClassifier(face_path)
+    eye_cascade = cv2.CascadeClassifier(eye_path)
     return face_cascade, eye_cascade
 
 face_cascade, eye_cascade = load_classifiers()
@@ -35,7 +45,7 @@ with col1:
 with col2:
     st.subheader("📊 Assistive Reading Insights")
     
-    if img_file_buffer is not None:
+    if img_file_buffer is not None and face_cascade is not None:
         bytes_data = img_file_buffer.getvalue()
         cv2_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
         gray = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2GRAY)
@@ -52,13 +62,14 @@ with col2:
             roi_gray = gray[y : y + h, x : x + w]
             roi_color = cv2_img[y : y + h, x : x + w]
             
-            eyes = eye_cascade.detectMultiScale(roi_gray, scaleFactor=1.1, minNeighbors=4, minSize=(15, 15))
-            eyes_detected = len(eyes)
-            
-            for (ex, ey, ew, eh) in eyes:
-                center = (int(ex + ew/2), int(ey + eh/2))
-                radius = int((ew + eh)/4)
-                cv2.circle(roi_color, center, radius, (0, 255, 0), 2)
+            if eye_cascade is not None:
+                eyes = eye_cascade.detectMultiScale(roi_gray, scaleFactor=1.1, minNeighbors=4, minSize=(15, 15))
+                eyes_detected = len(eyes)
+                
+                for (ex, ey, ew, eh) in eyes:
+                    center = (int(ex + ew/2), int(ey + eh/2))
+                    radius = int((ew + eh)/4)
+                    cv2.circle(roi_color, center, radius, (0, 255, 0), 2)
             
             if w > 190:
                 posture_status = "🔴 Too Close"
